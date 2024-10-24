@@ -1,0 +1,166 @@
+#include <Servo.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// Definir los servos
+Servo servoModificado;
+Servo servoNormal;
+
+// Pines del sensor ultrasonido
+const int trigPin = 10;
+const int echoPin = 9;
+
+// Pin del sensor infrarrojo (nuevo)
+const int sensorIR = A3;
+
+// Pines del sensor de color
+const int S0 = 2;
+const int S1 = 3;
+const int S2 = 4;
+const int S3 = 5;
+const int sensorOut = 6;
+
+// Inicialización de la pantalla LCD I2C
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Dirección I2C de la pantalla
+
+// Variables del sensor ultrasonido
+long duration;
+float distance;
+
+// Variables del sensor de color
+int redFrequency, greenFrequency, blueFrequency;
+String colorDetected;
+
+// Variables de conteo
+int conteoPelotas = 0;
+bool pelotaContada = false;
+
+void setup() {
+  // Configuración de los servos
+  servoModificado.attach(7);  // Conecta el servo modificado al pin 7
+  servoNormal.attach(8);      // Conecta el servo normal al pin 8
+
+  // Configuración del sensor ultrasonido
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  // Configuración del sensor infrarrojo
+  pinMode(sensorIR, INPUT);
+
+  // Configuración del sensor de color
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
+  pinMode(S3, OUTPUT);
+  pinMode(sensorOut, INPUT);
+
+  digitalWrite(S0, HIGH);
+  digitalWrite(S1, LOW);
+
+  // Configuración de la pantalla LCD
+  lcd.init();
+  lcd.backlight();
+
+  // Inicializar en posición el servo normal
+  servoNormal.write(90);
+
+  lcd.setCursor(0, 0);
+  lcd.print("Iniciando...");
+  delay(2000);
+}
+
+void loop() {
+  medirTamanoPelota();
+  detectarColorPelota();
+  mostrarEnPantalla();
+
+  // Manejo del servo modificado (gira un cuarto de vuelta)
+  servoModificado.write(0);  // 0 grados para mover el servo
+  delay(150);                // Espera 150 ms para el giro
+  servoModificado.write(85);   // Vuelve a la posición inicial
+  delay(2000);
+
+  for (int pos = 90; pos >= 0; pos -= 1) {  // Decrementar de 90 a 0 grados
+    servoNormal.write(pos);  // Mover el servo a la posición actual
+    delay(15);           // Esperar 15 milisegundos entre cada paso (ajustar para cambiar velocidad)
+  }
+  
+  delay(1000);  // Pausar 1 segundo cuando llega a 0 grados
+
+  // Mover lentamente de 0 a 90 grados
+// Mover lentamente de 0 a 90 grados
+  for (int pos = 0; pos <= 90; pos += 1) {  // Incrementar de 0 a 90 grados
+    servoNormal.write(pos);  // Mover el servo a la posición actual
+    delay(15);           // Esperar 15 milisegundos entre cada paso (ajustar para cambiar velocidad)
+  }
+
+  // Conteo de pelotas con el sensor infrarrojo
+  if (digitalRead(sensorIR) == LOW && !pelotaContada) {
+    conteoPelotas++;
+    pelotaContada = true;
+  } else if (digitalRead(sensorIR) == HIGH) {
+    pelotaContada = false;
+  }
+}
+
+void medirTamanoPelota() {
+  // Enviar el pulso del trigPin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Calcular el tiempo de retorno del eco
+  duration = pulseIn(echoPin, HIGH);
+
+  // Convertir a distancia
+  distance = duration * 0.034 / 2;
+}
+
+void detectarColorPelota() {
+  // Seleccionar el filtro rojo
+  digitalWrite(S2, LOW);
+  digitalWrite(S3, LOW);
+  redFrequency = pulseIn(sensorOut, LOW);
+
+  // Seleccionar el filtro verde
+  digitalWrite(S2, HIGH);
+  digitalWrite(S3, HIGH);
+  greenFrequency = pulseIn(sensorOut, LOW);
+
+  // Seleccionar el filtro azul
+  digitalWrite(S2, LOW);
+  digitalWrite(S3, HIGH);
+  blueFrequency = pulseIn(sensorOut, LOW);
+
+  // Detección del color
+  if (redFrequency < greenFrequency && redFrequency < blueFrequency) {
+    colorDetected = "Rojo";
+  } else if (greenFrequency < redFrequency && greenFrequency < blueFrequency) {
+    colorDetected = "Verde";
+  } else if (blueFrequency < redFrequency && blueFrequency < greenFrequency) {
+    colorDetected = "Azul";
+  } else {
+    colorDetected = "Descon";
+  }
+}
+
+void mostrarEnPantalla() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("T: ");
+  lcd.print(distance);
+  lcd.print("cm");
+
+  lcd.setCursor(0, 1);
+  lcd.print("C: ");
+  lcd.print(colorDetected);
+  
+  // Mostrar conteo de pelotas
+  lcd.setCursor(8, 1); 
+  lcd.print("P:");
+  lcd.print(conteoPelotas);
+
+  delay(100); // Mantener los resultados en la pantalla por 100 ms
+} 
